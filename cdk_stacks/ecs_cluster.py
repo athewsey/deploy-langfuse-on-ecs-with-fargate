@@ -6,6 +6,7 @@ import aws_cdk as cdk
 
 from aws_cdk import (
   Stack,
+  aws_ec2 as ec2,
   aws_ecs as ecs,
 )
 
@@ -14,7 +15,7 @@ from constructs import Construct
 
 class ECSClusterStack(Stack):
 
-  def __init__(self, scope: Construct, construct_id: str, vpc, **kwargs) -> None:
+  def __init__(self, scope: Construct, construct_id: str, vpc: ec2.IVpc, **kwargs) -> None:
 
     super().__init__(scope, construct_id, **kwargs)
 

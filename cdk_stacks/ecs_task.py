@@ -6,8 +6,10 @@ import aws_cdk as cdk
 
 from aws_cdk import (
   Stack,
+  aws_ecr,
   aws_ecs,
-  aws_iam
+  aws_iam,
+  aws_secretsmanager,
 )
 
 from constructs import Construct
@@ -21,7 +23,15 @@ def check_env_variables(envars: dict, vars: List[str]):
 
 class ECSTaskStack(Stack):
 
-  def __init__(self, scope: Construct, construct_id: str, ecr_repository, database_secret, load_balancer_url, **kwargs) -> None:
+  def __init__(
+    self,
+    scope: Construct,
+    construct_id: str,
+    ecr_repository: aws_ecr.Repository,
+    database_secret: aws_secretsmanager.ISecret,
+    load_balancer_url: str,
+    **kwargs,
+  ) -> None:
 
     super().__init__(scope, construct_id, **kwargs)
 

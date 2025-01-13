@@ -7,7 +7,9 @@ import aws_cdk as cdk
 from aws_cdk import (
   Stack,
   aws_ec2,
+  aws_ecs,
   aws_ecs_patterns,
+  aws_elasticloadbalancingv2 as elbv2,
 )
 
 from constructs import Construct
@@ -15,9 +17,17 @@ from constructs import Construct
 
 class ECSAlbFargateServiceStack(Stack):
 
-  def __init__(self, scope: Construct, construct_id: str,
-    vpc, ecs_cluster, ecs_task_definition,
-    load_balancer, sg_rds_client, **kwargs) -> None:
+  def __init__(
+    self,
+    scope: Construct,
+    construct_id: str,
+    vpc: aws_ec2.IVpc,
+    ecs_cluster: aws_ecs.ICluster,
+    ecs_task_definition: aws_ecs.ITaskDefinition,
+    load_balancer: elbv2.IApplicationLoadBalancer,
+    sg_rds_client: aws_ec2.ISecurityGroup,
+    **kwargs,
+  ) -> None:
 
     super().__init__(scope, construct_id, **kwargs)
 

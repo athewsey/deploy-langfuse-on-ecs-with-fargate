@@ -15,7 +15,7 @@ from constructs import Construct
 
 class ApplicationLoadBalancerStack(Stack):
 
-  def __init__(self, scope: Construct, construct_id: str, vpc, **kwargs) -> None:
+  def __init__(self, scope: Construct, construct_id: str, vpc: aws_ec2.IVpc, **kwargs) -> None:
 
     super().__init__(scope, construct_id, **kwargs)
 
