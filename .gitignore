@@ -16,3 +16,6 @@ cdk.out
 .template.cdk.context.json
 .*.log
 *.bak
+
+# NodeJS
+node_modules/
