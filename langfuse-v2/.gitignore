@@ -16,3 +16,6 @@ cdk.out
 .template.cdk.context.json
 .*.log
 *.bak
+
+# Node deps (for anybody installing CDK CLI locally):
+node_modules/

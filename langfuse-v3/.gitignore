@@ -12,3 +12,6 @@ __pycache__
 .cdk.staging
 cdk.out
 cdk.context.json
+
+# Node deps (for anybody installing CDK CLI locally):
+node_modules/
