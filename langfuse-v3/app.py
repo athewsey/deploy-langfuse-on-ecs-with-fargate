@@ -26,8 +26,8 @@ from cdk_stacks import (
 )
 
 AWS_ENV = cdk.Environment(
-  account=os.environ["CDK_DEFAULT_ACCOUNT"],
-  region=os.environ["CDK_DEFAULT_REGION"]
+  account=os.environ.get("CDK_DEFAULT_ACCOUNT"),
+  region=os.environ.get("CDK_DEFAULT_REGION"),
 )
 
 app = cdk.App()
