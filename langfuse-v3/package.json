@@ -1,0 +1,17 @@
+{
+  "name": "deploy-langfuse-on-ecs-with-fargate",
+  "version": "0.0.1",
+  "description": "Python CDK example to deploy Langfuse on Amazon ECS with Fargate",
+  "main": "index.js",
+  "directories": {
+    "example": "examples"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "MIT-0",
+  "dependencies": {
+    "aws-cdk": "2.177.0"
+  }
+}
