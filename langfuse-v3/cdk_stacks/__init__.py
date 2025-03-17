@@ -11,5 +11,6 @@ from .ecs_task_langfuse_worker import ECSTaskLangfuseWorkerStack
 from .efs_clickhouse import EFSStack
 from .redis import RedisClusterStack
 from .s3 import S3BucketStack
+from .secrets import SecretsStack
 from .service_discovery import ServiceDiscoveryStack
 from .vpc import VpcStack

@@ -8,7 +8,8 @@ from aws_cdk import (
   Stack,
   aws_ecs,
   aws_iam,
-  aws_logs
+  aws_logs,
+  aws_secretsmanager,
 )
 
 from constructs import Construct
@@ -22,9 +23,11 @@ class ECSTaskLangfuseWorkerStack(Stack):
     clickhouse_secret,
     clickhouse_migration_url,
     clickhouse_url,
+    encryption_key_secret: aws_secretsmanager.ISecret,
     redis_cluster,
     s3_blob_bucket,
     s3_event_bucket,
+    salt_secret: aws_secretsmanager.ISecret,
     **kwargs) -> None:
 
     super().__init__(scope, construct_id, **kwargs)
@@ -113,7 +116,11 @@ class ECSTaskLangfuseWorkerStack(Stack):
       logging=aws_ecs.LogDriver.aws_logs(
         stream_prefix="langfuse-worker",
         log_retention=aws_logs.RetentionDays.ONE_WEEK
-      )
+      ),
+      secrets={
+        "ENCRYPTION_KEY": aws_ecs.Secret.from_secrets_manager(encryption_key_secret),
+        "SALT": aws_ecs.Secret.from_secrets_manager(salt_secret),
+      },
     )
 
     port_mapping = aws_ecs.PortMapping(

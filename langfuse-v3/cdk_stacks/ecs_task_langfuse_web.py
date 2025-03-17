@@ -8,7 +8,8 @@ from aws_cdk import (
   Stack,
   aws_ecs,
   aws_iam,
-  aws_logs
+  aws_logs,
+  aws_secretsmanager,
 )
 
 from constructs import Construct
@@ -22,9 +23,12 @@ class ECSTaskLangfuseWebStack(Stack):
     clickhouse_secret,
     clickhouse_migration_url,
     clickhouse_url,
+    encryption_key_secret: aws_secretsmanager.ISecret,
+    nextauth_secret: aws_secretsmanager.ISecret,
     redis_cluster,
     s3_blob_bucket,
     s3_event_bucket,
+    salt_secret: aws_secretsmanager.ISecret,
     load_balancer_url,
     **kwargs) -> None:
 
@@ -115,7 +119,12 @@ class ECSTaskLangfuseWebStack(Stack):
       logging=aws_ecs.LogDriver.aws_logs(
         stream_prefix="langfuse-web",
         log_retention=aws_logs.RetentionDays.ONE_WEEK
-      )
+      ),
+      secrets={
+        "ENCRYPTION_KEY": aws_ecs.Secret.from_secrets_manager(encryption_key_secret),
+        "NEXTAUTH_SECRET": aws_ecs.Secret.from_secrets_manager(nextauth_secret),
+        "SALT": aws_ecs.Secret.from_secrets_manager(salt_secret),
+      },
     )
 
     port_mapping = aws_ecs.PortMapping(
