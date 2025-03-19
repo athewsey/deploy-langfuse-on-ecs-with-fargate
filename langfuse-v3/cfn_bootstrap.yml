@@ -153,7 +153,7 @@ Resources:
                 - npm install
                 - pip3 install -r requirements.txt
                 - npx cdk bootstrap
-                - if [ "$CFN_EVENT_TYPE" = "Delete" ]; then npx cdk destroy --force; else npx cdk deploy --all --concurrency 8 --require-approval never; fi
+                - if [ "$CFN_EVENT_TYPE" = "Delete" ]; then npx cdk destroy --all --force; else npx cdk deploy --all --concurrency 8 --require-approval never; fi
               finally:
                 # Re-install requests in case it got overwritten:
                 - pip3 install "requests>=2.27,<3"
