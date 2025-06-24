@@ -104,6 +104,12 @@ class ECSTaskLangfuseWebStack(Stack):
       # "LANGFUSE_S3_MEDIA_UPLOAD_PREFIX": "media/", # default: "" (the bucket root)
       "LANGFUSE_S3_MEDIA_UPLOAD_ENABLED": "true",
 
+      # Batch Export Configuration
+      "LANGFUSE_S3_BATCH_EXPORT_ENABLED": "true",
+      "LANGFUSE_S3_BATCH_EXPORT_BUCKET": s3_event_bucket.bucket_name,
+      "LANGFUSE_S3_BATCH_EXPORT_PREFIX": "exports/",
+      "LANGFUSE_S3_BATCH_EXPORT_REGION": self.region,
+
       "NEXTAUTH_URL": load_balancer_url,
     }
 
@@ -129,3 +135,7 @@ class ECSTaskLangfuseWebStack(Stack):
     cdk.CfnOutput(self, 'TaskDefinitionArn',
       value=self.ecs_task_definition.task_definition_arn,
       export_name=f'{self.stack_name}-TaskDefinitionArn')
+
+
+
+
