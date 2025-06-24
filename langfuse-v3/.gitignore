@@ -1,14 +1,47 @@
-.gitignore
-*.swp
-package-lock.json
-__pycache__
-.pytest_cache
-.venv
-*.egg-info
-.DS_Store
-*.bak
+# Ignore python notebook checkpoints
+.ipynb_checkpoints
 
-# CDK asset staging directory
-.cdk.staging
+# Ignore python venv folder
+.venv
+
+# Ignore .DS_Store files
+.DS_Store
+
+# Ignore build output folders
+
+build/
+dist/
+
+# Ignore node_modules folder
+node_modules/
+
+# Ignore log files and databases
+*.log
+*.sql
+*.sqlite
+
+# Ignore OS generated files
+.DS_Store
+
+.idea
+
+.vscode
+.vscode/**
+
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Ignore python notebook checkpoints
+/.ipynb_checkpoints/
+
+
+# ignore cdk-related directories
+dist
 cdk.out
+.cdk.staging
 cdk.context.json
+
+config.py

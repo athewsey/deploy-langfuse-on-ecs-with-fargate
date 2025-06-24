@@ -1,252 +1,119 @@
+# Self-Host Langfuse on Amazon ECS with Fargate using TypeScript CDK
 
-# Hosting Langfuse V3 on Amazon ECS with Fargate using CDK Python
+Langfuse is an Open Source LLM Engineering platform that helps teams collaboratively debug, analyze, and iterate on their LLM applications.
 
-This repository contains the AWS CDK Python code for deploying the [Langfuse](https://langfuse.com/) application using Amazon Elastic Container Registry (ECR) and Amazon Elastic Container Service (ECS).
+This repository demonstrates how to deploy a self-hosted Langfuse solution using AWS Fargate for Amazon ECS. It is designed for initial experimentation and is not suitable for production use. Additionally, it does not include all capabilities available in the Langfuse Enterprise Edition. For production-ready deployments, check out the [Langfuse offerings through AWS Marketplace](https://aws.amazon.com/marketplace/seller-profile?id=seller-nmyz7ju7oafxu).
 
-Langfuse is an open-source LLM engineering platform that helps teams collaboratively debug, analyze, and iterate on their LLM applications.
 
-![lanfuse-v3-on-aws-ecs-fargate-arch](./langfuse-v3-on-aws-ecs-fargate-arch.svg)
-> :information_source: For more information on Langfuse's architecture, please check [the official documentation](https://langfuse.com/self-hosting#architecture)
+## Architecture overview
 
-The `cdk.json` file tells the CDK Toolkit how to execute your app.
+This deployment involves multiple AWS services to host Langfuse components as described in their [official documentation on self-hosting](https://langfuse.com/self-hosting#architecture). In this sample, shown also in the architecture diagram below, we use:
 
-This project is set up like a standard Python project.  The initialization
-process also creates a virtualenv within this project, stored under the `.venv`
-directory.  To create the virtualenv it assumes that there is a `python3`
-(or `python` for Windows) executable in your path with access to the `venv`
-package. If for any reason the automatic creation of the virtualenv fails,
-you can create the virtualenv manually.
+1. [AWS Fargate for Amazon ECS](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/AWS_Fargate.html) to host the required containers without the need to manage servers or clusters of Amazon EC2 instances
+2. [Amazon RDS](https://aws.amazon.com/rds/postgresql/) for the Postgres OLTP store
+3. [Amazon Elasticache](https://aws.amazon.com/elasticache/) for the Valkey cache
+4. [Amazon EFS](https://aws.amazon.com/efs/) for durable managed storage to back the deployed [ClickHouse](https://clickhouse.com/docs/intro) OLAP system
+5. [Amazon CloudFront](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/Introduction.html) for high-performance CDN and HTTPS connectivity to the deployed Langfuse service.
 
-To manually create a virtualenv on MacOS and Linux:
+![](doc/CDK-Langfuse-Architecture.png "Architecture diagram showing LLM applications and web browsers connecting to Langfuse through the above described components")
 
-```
-$ git clone --depth=1 https://github.com/aws-samples/deploy-langfuse-on-ecs-with-fargate.git
-$ cd deploy-langfuse-on-ecs-with-fargate
-$ git sparse-checkout init --cone
-$ git sparse-checkout set langfuse-v3
-$ cd langfuse-v3
+### Request Flow Sequence:
 
-$ python3 -m venv .venv
-```
+1. **Client Request**: LLM applications and web browsers initiate requests through the Langfuse SDK or directly via the web interface. These requests are routed to Amazon CloudFront, which serves as the Content Delivery Network (CDN) to provide HTTPS termination, caching, and global distribution.
+2. **Routing Through Application Load Balancer**: CloudFront forwards the requests to the Application Load Balancer (ALB) within the Virtual Private Cloud (VPC). The ALB ensures proper routing of traffic to the ECS cluster hosting Langfuse components.
+3. **Processing in ECS Cluster**: The ECS cluster, powered by AWS Fargate, processes requests using two primary components:
 
-After the init process completes and the virtualenv is created, you can use the following
-step to activate your virtualenv.
+    * Langfuse Web Server: Handles API endpoints and user-facing interactions.
+    * Langfuse Worker: Processes background tasks such as event batching and analytics.
 
-```
-$ source .venv/bin/activate
-```
+4. **Data Storage Operations**: Depending on the type of data being processed, requests interact with various storage systems:
 
-If you are a Windows platform, you would activate the virtualenv like this:
+    * Amazon RDS Aurora Postgres OLTP: Stores transactional data such as user configurations, API keys, and project metadata.
+    * Amazon EFS-backed ClickHouse OLAP: Handles analytical workloads for high-volume trace and span data.
+    * Amazon S3: Stores raw objects like logs or files uploaded during processing.
 
-```
-% .venv\Scripts\activate.bat
-```
+5. **Caching with ElastiCache**: The system utilizes Amazon ElastiCache (Valkey cache) for Redis-compatible caching to optimize performance by reducing database load and enabling faster access to frequently queried data.
+6. **Response Delivery**: Once processing is complete, responses are sent back to clients through the same path, ensuring secure delivery via CloudFront. Metrics and logs generated during processing from ECS are also forwarded to Amazon CloudWatch for observability.
 
-Once the virtualenv is activated, you can install the required dependencies.
+This flow ensures efficient handling of requests while leveraging AWS's managed services for scalability, reliability, and security.
 
-```
-(.venv) $ pip install -r requirements.txt
-```
-> To add additional dependencies, for example other CDK libraries, just add
-them to your `setup.py` file and rerun the `pip install -r requirements.txt`
-command.
 
-## Prerequisites
+## Deployment option 1: Quick start
 
-**Set up `cdk.context.json`**
+If you don't have CDK development tooling set up already, and would just like to deploy the Langfuse architecture with the default settings - you can use the [AWS CloudFormation](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/Welcome.html) template in [cfn_bootstrap.yml](./cfn_bootstrap.yml): Open the [CloudFormation Console](https://console.aws.amazon.com/cloudformation/home?#/stacks/create) in your target AWS Account and Region, click **Create stack**, and upload the template file.
 
-Then, we need to set approperly the cdk context configuration file, `cdk.context.json`.
+This "bootstrap" stack sets up a CI project in [AWS CodeBuild](https://docs.aws.amazon.com/codebuild/latest/userguide/welcome.html) which pulls the sample code and performs the below app CDK setup steps for you automatically in the Cloud - with no local development environment required. ⚠️ **Note** though, that the CodeBuild project is granted *broad permissions* to deploy all the sample's AWS resources on your behalf - so is not recommended for use in production environments as-is.
 
-For example,
 
-```
-{
-  "private_dns_namespace_name": "langfuse.local",
-  "db_cluster_name": "langfuse-db",
-  "ecr": [
-    {
-      "repository_name": "langfuse-web",
-      "docker_image_name": "langfuse/langfuse",
-      "tag": "3"
-    },
-    {
-      "repository_name": "langfuse-worker",
-      "docker_image_name": "langfuse/langfuse-worker",
-      "tag": "3"
-    },
-    {
-      "repository_name": "clickhouse",
-      "docker_image_name": "clickhouse",
-      "tag": "24.12.3.47"
-    }
-  ],
-  "ecs_cluster_name": "langfuse",
-  "langfuse_worker_desired_count": 1,
-  "langfuse_worker_env": {
-    "NODE_ENV": "production",
-    "SALT": "salt (generate by running 'openssl rand -base64 32')",
-    "ENCRYPTION_KEY": "encryption key (generate by running 'openssl rand -hex 32')",
-    "TELEMETRY_ENABLED": "true",
-    "LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES": "true"
-  },
-  "langfuse_web_env": {
-    "NODE_ENV": "production",
-    "NEXTAUTH_SECRET": "secret (generate by running 'openssl rand -base64 32')",
-    "SALT": "salt (generate by running 'openssl rand -base64 32')",
-    "ENCRYPTION_KEY": "encryption key (generate by running 'openssl rand -hex 32')",
-    "HOSTNAME": "0.0.0.0",
-    "LANGFUSE_S3_MEDIA_DOWNLOAD_URL_EXPIRY_SECONDS": "604800",
-    "TELEMETRY_ENABLED": "true",
-    "LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES": "true",
-    "LANGFUSE_SDK_CI_SYNC_PROCESSING_ENABLED": "false",
-    "LANGFUSE_READ_FROM_POSTGRES_ONLY": "false",
-    "LANGFUSE_READ_FROM_CLICKHOUSE_ONLY": "true",
-    "LANGFUSE_RETURN_FROM_CLICKHOUSE": "true"
-  }
-}
-```
+## After deployment: Getting started
 
-:information_source: This guide covers Langfuse v3. The docker image version (`tag`) of `langfuse-web` and `langfuse-worker` should be set to `3`.
+You can find the URL to access your Langfuse UI from the `LangfuseUrl` "Output" of your stack in [CloudFormation](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/Welcome.html).
 
-:information_source: For more details on environment variables for the Langfuse Web (`langfuse_web_env`) and Langfuse Worker (`langfuse_worker_env`) containers, please refer to the [official configuration guide](https://langfuse.com/self-hosting/configuration#environment-variables).
+If you deployed with the default, recommended configuration (see [bin/demo.ts](bin/demo.ts)) using Amazon Cognito for authentication, you'll need to head on over to your created user pool in the [Amazon Cognito User Pools console](https://console.aws.amazon.com/cognito/v2/idp/user-pools) to set yourself up a username and password for logging in to Langfuse.
 
-**Bootstrap AWS environment for AWS CDK app**
+If you *disabled* Cognito during deployment, you can simply "Sign up" from your Langfuse URL.
 
-Also, before any AWS CDK app can be deployed, you have to bootstrap your AWS environment to create certain AWS resources that the AWS CDK CLI (Command Line Interface) uses to deploy your AWS CDK app.
+> ⚠️ **Warning:** Allowing public open sign-up is not recommended! you could also consider re-deploying the `LangfuseDemo` construct with `langfuseEnvironment: {'AUTH_DISABLE_SIGNUP': 'true'}` to disable it, after creating your first admin user.
 
-Run the `cdk bootstrap` command to bootstrap the AWS environment.
 
-```
-(.venv) $ cdk bootstrap
-```
 
-### Deploy
+## Deployment option 2: Developer setup (Suggested workflow)
 
-At this point you can now synthesize the CloudFormation template for this code.
+If you are comfortable with CDK deployment or want to customize the app, you'll need to set up your local development environment rather than using the quick-start template above.
 
-```
-(.venv) $ export CDK_DEFAULT_ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
-(.venv) $ export CDK_DEFAULT_REGION=$(aws configure get region)
-(.venv) $ cdk synth --all
-```
+### Prerequisites:
 
-Use `cdk deploy` command to create the stack shown above.
+1. Docker or Finch
 
-```
-(.venv) $ cdk deploy --require-approval never --all
-```
+    This project requires a local container build environment. If your organization doesn't support [Docker Desktop](https://www.docker.com/products/docker-desktop/), you can instead install [Finch](https://runfinch.com/). If using Finch instead of Docker, remember to:
 
-We can list all the CDK stacks by using the `cdk list` command prior to deployment.
+    - Initialise the VM with `finch vm start`, and
+    - Tell CDK how to build containers, by running `export CDK_DOCKER=finch` (on MacOS/Linux), or `SET CDK_DOCKER=finch` (on Windows)
 
-```
-(.venv) $ cdk list
-LangfuseECRStack
-LangfuseVpcStack
-LangfuseWebALBStack
-LangfuseCacheStack
-LangfuseAuroraPostgreSQLStack
-LangfuseS3BucketStack
-LangfuseServiceDiscoveryStack
-LangfuseECSClusterStack
-LangfuseClickhouseEFSStack
-LangfuseClickhouseECSTaskStack
-LangfuseClickhouseECSServiceStack
-LangfuseWorkerECSTaskStack
-LangfuseWorkerECSServiceStack
-LangfuseWebECSTaskStack
-LangfuseWebECSServiceStack
-```
+2.  NodeJS
 
-## Clean Up
+    This project requires [NodeJS](https://nodejs.org/) v20+
 
-Delete the CloudFormation stack by running the below command.
+3.  AWS CLI login
 
-```
-(.venv) $ cdk destroy --force --all
-```
+    To actually deploy the infrastructure to a target AWS Account (and possibly, even to synthesize a concrete template), you'll need to [configure your AWS CLI credentials](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-configure.html). Note that whatever principal you log in to AWS with (User, Role, etc) will need the relevant *IAM Permissions* to deploy and manage all types of resources used by the sample - which is a broad set.
 
-## Useful commands
+    You'll also want to set your target *AWS Region*. You can check your current active AWS Account by running `aws sts get-caller-identity`, and your selected region with `aws configure get region`.
 
- * `cdk ls`          list all stacks in the app
- * `cdk synth`       emits the synthesized CloudFormation template
- * `cdk deploy`      deploy this stack to your default AWS account/region
- * `cdk diff`        compare deployed stack with current state
- * `cdk docs`        open CDK documentation
 
-Enjoy!
+### Development workflow
 
-## Tracing for your LLM Application with Langfuse
+Once your development environment is set up, this sample works like a standard CDK app project.
 
-After deploying all CDK stacks, you can find the **Langfuse URL** using the following command:
+First, install the project's dependencies:
 
 ```bash
-aws cloudformation describe-stacks --stack-name LangfuseWebECSServiceStack --region ${CDK_DEFAULT_REGION} | \
-  jq -r '.Stacks[0].Outputs | map(select(.OutputKey == "LoadBalancerDNS")) | .[0].OutputValue'
+npm install
 ```
 
-Next, open the **Langfuse URL** in your browser to create a new project for tracking your LLM application with Langfuse.
+Then, you can deploy it to AWS:
 
-### Create a New Project in Langfuse
+```bash
+# Deploy or update all Stacks in the app:
+# (Optionally specify --require-approval never to suppress approval prompts)
+npx cdk deploy --all
+```
 
-1. Create a Langfuse Account
+To **delete** the deployed infrastructure when you're done exploring, and avoid ongoing charges:
 
-    ![Login](./assets/01-langfuse-main-page.png)
+> ⚠️ **Warning:** Running the below will irreversibly delete any data you've stored in your deployed Langfuse instance!
 
-    ![Singup](./assets/02-sign-up.png)
-2. Create a New Project
-    ![New-Project](./assets/03-new-project.png)
-3. Create New API Credentials in the Project Settings
-    ![API-Keys](./assets/04-create-api-keys.png)
+```bash
+npx cdk destroy --all
+```
 
-### Log Your First LLM Call to Langfuse
+**Other useful commands** for the project include:
+- `npx cdk destroy` to delete the deployed infrastructure
+- `npx cdk synth` to ["synthesize"](https://docs.aws.amazon.com/cdk/v2/guide/configure-synth.html) the CDK application to deployable CloudFormation template(s), without actually deploying
+- `npx cdk list` to list all CDK stacks and their dependencies
 
-Open the `tracing_for_langchain_bedrock` notebook in the `examples` folder and run it. (See [here](./examples/tracing_for_langchain_bedrock.ipynb) for more information)
+Refer to the [CDK CLI commands guide](https://docs.aws.amazon.com/cdk/v2/guide/ref-cli-cmd.html) for a full reference
 
-You will the see the list of traces as follows:
-![Traces](./assets/05-traces.png)
-
-You will also see the details of the selected trace as follows:
-
-![Trace-detail](./assets/06-trace-detail.png)
-
-## References
-
-#### General
-
- * [(Official) Self-host Langfuse](https://langfuse.com/self-hosting)
- * [(Official) Langfuse configuration guide](https://langfuse.com/self-hosting/configuration)
- * [(GitHub) langfuse](https://github.com/langfuse/langfuse/)
- * [(GitHub) Langfuse v3 Terraform Module Sample](https://github.com/tubone24/langfuse-v3-terraform/)
- * [AWS CDK Reference Documentation](https://docs.aws.amazon.com/cdk/api/v2/)
- * [cdk-ecr-deployment](https://github.com/cdklabs/cdk-ecr-deployment) - A CDK construct to deploy docker image to Amazon ECR.
- * [Terraform - AWS Provider Docs](https://registry.terraform.io/providers/hashicorp/aws/latest/docs)
-
-#### Langfuse User Guide
-
-  * [(Workshop) GenAIOps - Observability for GenAI applications with Amazon Bedrock and Langfuse](https://catalog.workshops.aws/genaiops-langfuse)
-  * [Get Started with Langfuse Tracing](https://langfuse.com/docs/get-started)
-  * [Observability & Tracing for Langchain (Python & JS/TS)](https://langfuse.com/docs/integrations/langchain/tracing)
-
-#### Amazon ElastiCache
-
- * [Amazon ElastiCache Supported node types](https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/CacheNodes.SupportedTypes.html#CacheNodes.CurrentGen)
- * [Amazon ElastiCache Supported engines and versions](https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/supported-engine-versions.html)
- * [Comparing Valkey, Memcached, and Redis OSS self-designed caches](https://docs.aws.amazon.com/AmazonElastiCache/latest/dg/SelectEngine.html)
-
-#### Amazon Aurora PostgreSQL
-
- * [Working with Amazon Aurora PostgreSQL](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/Aurora.AuroraPostgreSQL.html)
-
-#### Clickhouse
-
- * [Clickhouse for self-hosting Langfuse v3](https://langfuse.com/self-hosting/infrastructure/clickhouse)
- * [(DockerHub) Clickhouse Docker Official Image](https://hub.docker.com/_/clickhouse)
- * [Clickhouse CLI](https://clickhouse.com/docs/en/integrations/sql-clients/clickhouse-client-local)
-
-## Security
-
-See [CONTRIBUTING](../CONTRIBUTING.md#security-issue-notifications) for more information.
 
 ## License
-
 This library is licensed under the MIT-0 License. See the LICENSE file.
